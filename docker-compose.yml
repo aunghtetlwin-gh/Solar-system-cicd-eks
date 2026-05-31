@@ -1,8 +1,6 @@
 services:
   app:
-    build:
-      context: .
-    image: solar-system-app:local
+    image: aunghtetlwin/solar-system-app:v1
     container_name: solar-system-app
     depends_on:
       mongo:
