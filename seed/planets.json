@@ -1,0 +1,74 @@
+[
+  {
+    "id": 0,
+    "name": "Sun",
+    "description": "The star at the center of the solar system.",
+    "image": "images/sun.png",
+    "velocity": "",
+    "distance": ""
+  },
+  {
+    "id": 1,
+    "name": "Mercury",
+    "description": "The smallest planet and the closest planet to the Sun.",
+    "image": "images/mercury.png",
+    "velocity": "",
+    "distance": ""
+  },
+  {
+    "id": 2,
+    "name": "Venus",
+    "description": "The second planet from the Sun.",
+    "image": "images/venus.png",
+    "velocity": "",
+    "distance": ""
+  },
+  {
+    "id": 3,
+    "name": "Earth",
+    "description": "The third planet from the Sun and our home.",
+    "image": "images/earth.png",
+    "velocity": "",
+    "distance": ""
+  },
+  {
+    "id": 4,
+    "name": "Mars",
+    "description": "The fourth planet from the Sun.",
+    "image": "images/mars.png",
+    "velocity": "",
+    "distance": ""
+  },
+  {
+    "id": 5,
+    "name": "Jupiter",
+    "description": "The largest planet in the solar system.",
+    "image": "images/jupiter.png",
+    "velocity": "",
+    "distance": ""
+  },
+  {
+    "id": 6,
+    "name": "Saturn",
+    "description": "The sixth planet from the Sun, known for its rings.",
+    "image": "images/saturn.png",
+    "velocity": "",
+    "distance": ""
+  },
+  {
+    "id": 7,
+    "name": "Uranus",
+    "description": "The seventh planet from the Sun.",
+    "image": "images/uranus.png",
+    "velocity": "",
+    "distance": ""
+  },
+  {
+    "id": 8,
+    "name": "Neptune",
+    "description": "The eighth planet from the Sun.",
+    "image": "images/neptune.png",
+    "velocity": "",
+    "distance": ""
+  }
+]

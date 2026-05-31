@@ -1,0 +1,339 @@
+name: solar-system-ci
+on:
+  push:
+    branches: [main,feat]
+env:
+    MONGO_URI: "mongodb+srv://supercluster.d83jj.mongodb.net/superData"
+    MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+    MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+jobs:
+    unit-testing:
+        # strategy:
+        #   matrix:
+        #     node-version: [18,19]
+        #     os: [ubuntu-latest, windows-latest]
+        #     exclude:
+        #       - node-version: 19
+        #         os: windows-latest
+        runs-on: ubuntu-latest
+        # services:
+        #   mongo:
+        #     image: mongo:latest
+        #     options: 
+         #       - name: mongo 
+        #     ports:
+        #       - 27017:27017
+        #     env:
+        #       MONGO_INITDB_ROOT_USERNAME: ${{ env.MONGO_USERNAME }}
+        #       MONGO_INITDB_ROOT_PASSWORD: ${{ env.MONGO_PASSWORD }}
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v6
+          - name: set up nodejs 
+            uses: actions/setup-node@v6
+            with:
+              node-version: 18
+          - name: cache node modules
+            uses: actions/cache@v5
+            with:
+              path: node_modules
+              key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          - name: install dependencies
+            run: npm install
+          - name: run tests
+            run: npm test
+          - name: uploading artifacts
+            if: always()
+            uses: actions/upload-artifact@v7
+            with:
+                name: my-artifact
+                path: test-results.xml            
+
+    code-coverage:
+        container:
+          image: node:18
+          # env:
+          #   MONGO_URI: ${{ env.MONGO_URI }}
+          #   MONGO_USERNAME: ${{ env.MONGO_USERNAME }}
+          #   MONGO_PASSWORD: ${{ env.MONGO_PASSWORD }}
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v6
+          # - name: set up nodejs
+          #   uses: actions/setup-node@v6
+          #   with:
+          #     node-version: 18
+          - name: cache node modules
+            uses: actions/cache@v5
+            with:
+              path: node_modules
+              key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          - name: install dependencies
+            run: npm install
+          - name: run tests with coverage
+            continue-on-error: true
+            run: npm run coverage
+          - name: uploading coverage report
+            uses: actions/upload-artifact@v7
+            with:
+                name: coverage-report
+                path: coverage/
+                retention-days: 5
+    
+    docker:
+        permissions:
+          contents: read
+          packages: write
+
+        needs: [unit-testing, code-coverage]
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v6
+
+          - name: Docker login
+            uses: docker/login-action@v4
+            with:
+              username: ${{ vars.docker_username }}
+              password: ${{ secrets.docker_password }}
+          
+          # - name: GHCR login
+          #   uses: docker/login-action@v4
+          #   with:
+          #     registry: ghcr.io
+          #     username: ${{ github.repository_owner }}
+          #     password: ${{ secrets.GITHUB_TOKEN }}
+          # - name: Set up Docker Buildx
+          #   uses: docker/setup-buildx-action@v4
+        
+          - name: Build Docker image
+            uses: docker/build-push-action@v7
+            with:
+              context: .
+              # file: ./Dockerfile
+              push: false
+              tags: ${{ vars.docker_username }}/solar-system-app:${{ github.sha }}
+
+          - name: docker test
+            run: |
+              docker run --name solar-system -d \
+              -p 3000:3000 \
+              -e MONGO_URI=$MONGO_URI \
+              -e MONGO_USERNAME=${{ env.MONGO_USERNAME }} \
+              -e MONGO_PASSWORD=${{ env.MONGO_PASSWORD }} \
+              --rm ${{ vars.docker_username }}/solar-system-app:${{ github.sha }}
+            
+              echo "testing docker container..."
+              wget -q -O - 127.0.0.1:3000/live | grep live
+          
+          - name: push Docker image
+            uses: docker/build-push-action@v7
+            with:
+              context: .
+              push: true
+              tags: |
+                ${{ vars.docker_username }}/solar-system-app:${{ github.sha }}
+              # ghcr.io/${{ github.repository_owner }}/solar-system-app:${{ github.sha }}
+    
+    dev-deploy: 
+      if: contains(github.ref, 'feat')
+      environment:
+        name: dev
+        url: http://${{ steps.get-url.outputs.ADDRESS }}
+      #step 3
+      outputs:
+        ingress_url: ${{ steps.get-url.outputs.ADDRESS }}
+      permissions:
+        contents: read
+        id-token: write
+        deployments: write
+      needs: docker
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v6
+        - name: install kubectl
+          uses: azure/setup-kubectl@v4
+          with:
+            version: 'v1.34.0'
+        # - name: set up kubeconfig
+        #   uses: azure/k8s-set-context@v5
+        #   with:
+        #       method: kubeconfig
+        #       kubeconfig: ${{ secrets.KUBECONFIG }}
+        # - name: checking k8s details
+        #   run: |
+        #     kubectl version
+        #     kubectl get nodes
+        - name: Configure AWS Credentials
+          uses: aws-actions/configure-aws-credentials@v3
+          with:
+            role-to-assume: arn:aws:iam::213113978019:role/github-oidc-role
+            aws-region: ap-southeast-1
+        
+        - name: Set up kubeconfig
+          run: |
+            aws eks update-kubeconfig --name attractive-lofi-dolphin --region ap-southeast-1
+
+        - name: cheking k8s
+          run: |
+            kubectl version
+            kubectl get nodes
+        
+        - name: testing replace token
+          uses: cschleiden/replace-tokens@v1
+          with:
+            tokenPrefix: '${'
+            tokenSuffix: '}'
+            files: '["kubernetes/development/*.yaml"]'
+          env:
+            NAMESPACE: testing
+            REPLICAS: ${{vars.REPLICAS}}
+            K8S_IMAGE: ${{ vars.docker_username }}/solar-system-app:${{ github.sha }}
+        
+        - name: check files after token replacement
+          run: |
+            cat kubernetes/development/deployment.yaml
+            cat kubernetes/development/service.yaml
+        
+        # - name: Create Mongo Secret (already created in cluster, so skipping this step)
+        #   run: |
+        #     cat <<EOF | kubectl apply -f -
+        #     apiVersion: v1
+        #     kind: Secret
+        #     metadata:
+        #       name: mongo-secret
+        #     type: Opaque
+        #     stringData:
+        #       MONGO_URI: "mongodb+srv://supercluster.d83jj.mongodb.net/superData"
+        #       MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+        #       MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+        #     EOF
+ 
+        - name: deploy to dev kubernetes
+          run: |
+            kubectl apply -f kubernetes/development/deployment.yaml 
+            kubectl apply -f kubernetes/development/service.yaml 
+        
+        - name: url
+          id: get-url  # step 1 and 2
+          run: |
+            echo "ADDRESS=$(kubectl get ingress solar-system-ingress -n testing -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')" >> "$GITHUB_OUTPUT"
+
+    
+    dev-integration-testing:
+      if: contains(github.ref, 'feat')
+      needs: dev-deploy
+      runs-on: ubuntu-latest
+      steps:
+
+        - name: test url ouput 
+            #step 4
+          env:
+            URL: ${{ needs.dev-deploy.outputs.ingress_url }}
+          run: |
+            echo $URL
+            echo "testing integration..."
+            curl http://$URL/live -s -k  | jq -r .status | grep -i live
+    
+    prod-deploy: 
+      if: contains(github.ref, 'main')
+      needs: docker
+      environment:
+        name: prod
+        url: https://${{ steps.get-url.outputs.ADDRESS }}
+      #step 3
+      outputs:
+        ingress_url: ${{ steps.get-url.outputs.ADDRESS }}
+      permissions:
+        contents: read
+        id-token: write
+        deployments: write
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v6
+        - name: install kubectl
+          uses: azure/setup-kubectl@v4
+          with:
+            version: 'v1.34.0'
+        # - name: set up kubeconfig
+        #   uses: azure/k8s-set-context@v5
+        #   with:
+        #       method: kubeconfig
+        #       kubeconfig: ${{ secrets.KUBECONFIG }}
+        # - name: checking k8s details
+        #   run: |
+        #     kubectl version
+        #     kubectl get nodes
+        - name: Configure AWS Credentials
+          uses: aws-actions/configure-aws-credentials@v3
+          with:
+            role-to-assume: arn:aws:iam::213113978019:role/github-oidc-role
+            aws-region: ap-southeast-1
+        
+        - name: Set up kubeconfig
+          run: |
+            aws eks update-kubeconfig --name attractive-lofi-dolphin --region ap-southeast-1
+
+        - name: cheking k8s
+          run: |
+            kubectl version
+            kubectl get nodes
+        
+        - name: testing replace token
+          uses: cschleiden/replace-tokens@v1
+          with:
+            tokenPrefix: '${'
+            tokenSuffix: '}'
+            files: '["kubernetes/development/*.yaml"]'
+          env:
+            NAMESPACE: testing
+            REPLICAS: ${{vars.REPLICAS}}
+            K8S_IMAGE: ${{ vars.docker_username }}/solar-system-app:${{ github.sha }}
+        
+        - name: check files after token replacement
+          run: |
+            cat kubernetes/development/deployment.yaml
+            cat kubernetes/development/service.yaml
+        
+        # - name: Create Mongo Secret (already created in cluster, so skipping this step)
+        #   run: |
+        #     cat <<EOF | kubectl apply -f -
+        #     apiVersion: v1
+        #     kind: Secret
+        #     metadata:
+        #       name: mongo-secret
+        #     type: Opaque
+        #     stringData:
+        #       MONGO_URI: "mongodb+srv://supercluster.d83jj.mongodb.net/superData"
+        #       MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+        #       MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+        #     EOF
+ 
+        - name: deploy to dev kubernetes
+          run: |
+            kubectl apply -f kubernetes/development/deployment.yaml 
+            kubectl apply -f kubernetes/development/service.yaml 
+        
+        - name: url
+          id: get-url  # step 1 and 2
+          run: |
+            echo "ADDRESS=$(kubectl get ingress solar-system-ingress -n testing -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')" >> "$GITHUB_OUTPUT"
+
+    
+    integration-testing:
+      if: contains(github.ref, 'main')
+      needs: prod-deploy
+      runs-on: ubuntu-latest
+      steps:
+
+        - name: test url ouput 
+            #step 4
+          env:
+            URL: ${{ needs.prod-deploy.outputs.ingress_url }}
+          run: |
+            echo $URL
+            echo "testing integration..."
+            curl http://$URL/live -s -k  | jq -r .status | grep -i live
