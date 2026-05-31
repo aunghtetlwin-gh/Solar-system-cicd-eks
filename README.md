@@ -1,5 +1,5 @@
 # Solar System CI/CD EKS Project
-
+  
 This project is a Node.js, Express, HTML, and MongoDB Solar System application being converted into a DevOps portfolio project.
 
 Current stack:
