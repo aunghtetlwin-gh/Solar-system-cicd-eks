@@ -33,6 +33,11 @@ output "node_group_role_arn" {
   value       = aws_iam_role.node_group.arn
 }
 
+output "ebs_csi_driver_role_arn" {
+  description = "IAM role ARN used by the EBS CSI driver service account."
+  value       = aws_iam_role.ebs_csi_driver.arn
+}
+
 output "public_subnet_ids" {
   description = "Public subnet IDs."
   value       = aws_subnet.public[*].id

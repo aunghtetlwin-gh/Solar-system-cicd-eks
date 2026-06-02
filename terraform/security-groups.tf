@@ -8,20 +8,24 @@ resource "aws_security_group" "cluster" {
   }
 }
 
-resource "aws_security_group_ingress_rule" "cluster_https" {
+resource "aws_security_group_rule" "cluster_https_ingress" {
+  type              = "ingress"
   security_group_id = aws_security_group.cluster.id
   description       = "Allow HTTPS traffic to the EKS control plane security group"
 
-  ip_protocol = "tcp"
+  protocol    = "tcp"
   from_port   = 443
   to_port     = 443
-  cidr_ipv4   = var.vpc_cidr
+  cidr_blocks = [var.vpc_cidr]
 }
 
-resource "aws_security_group_egress_rule" "cluster_all" {
+resource "aws_security_group_rule" "cluster_all_egress" {
+  type              = "egress"
   security_group_id = aws_security_group.cluster.id
   description       = "Allow all outbound traffic from the EKS control plane security group"
 
-  ip_protocol = "-1"
-  cidr_ipv4   = "0.0.0.0/0"
+  protocol    = "-1"
+  from_port   = 0
+  to_port     = 0
+  cidr_blocks = ["0.0.0.0/0"]
 }
