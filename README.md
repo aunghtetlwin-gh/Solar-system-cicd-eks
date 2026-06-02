@@ -9,7 +9,8 @@ Current stack:
 - Docker and Docker Compose
 - Docker Hub
 - Terraform for AWS EKS infrastructure
-- Kubernetes and GitHub Actions planned for the next phases
+- Kubernetes on AWS EKS
+- GitHub Actions CI
 
 ## Application
 
@@ -245,6 +246,7 @@ It is designed to create:
 - EKS managed node group
 - IAM roles and policies
 - EKS add-ons: VPC CNI, kube-proxy, CoreDNS, and EBS CSI driver
+- IAM OIDC provider and IRSA role for the EBS CSI driver
 
 Create local Terraform variables:
 
@@ -275,6 +277,12 @@ terraform plan
 
 Do not run `terraform apply` until you have reviewed the plan and accepted the AWS cost.
 
+Create the EKS infrastructure:
+
+```bash
+terraform apply
+```
+
 After the EKS cluster exists, configure kubectl:
 
 ```bash
@@ -290,6 +298,154 @@ Verify nodes:
 kubectl get nodes
 ```
 
+## Deploy To EKS
+
+Kubernetes manifests are in:
+
+```text
+kubernetes/eks/
+```
+
+They create:
+
+- `solar-system` namespace
+- `gp3` StorageClass using the AWS EBS CSI driver
+- MongoDB PVC backed by an EBS volume
+- MongoDB Deployment and internal Service
+- ConfigMap for app environment variables
+- ConfigMap with planet seed data
+- MongoDB seed Job
+- Solar System app Deployment
+- LoadBalancer Service for external access
+
+Apply the manifests:
+
+```bash
+kubectl apply -f kubernetes/eks/
+```
+
+Check resources:
+
+```bash
+kubectl get all -n solar-system
+kubectl get pvc -n solar-system
+kubectl get pv
+kubectl get svc -n solar-system
+```
+
+Get the external LoadBalancer hostname:
+
+```bash
+kubectl get svc solar-system-app -n solar-system
+```
+
+Open the `EXTERNAL-IP` hostname in a browser:
+
+```text
+http://<load-balancer-hostname>
+```
+
+The app image used by EKS is:
+
+```text
+aunghtetlwin/solar-system-app:latest
+```
+
+## Troubleshooting: MongoDB PVC Pending
+
+Problem seen during deployment:
+
+```text
+mongo pod Pending
+mongo-data PVC Pending
+UnauthorizedOperation: not authorized to perform ec2:CreateVolume
+```
+
+The PVC event showed the EBS CSI controller initially tried to create an EBS volume using the node group role:
+
+```text
+arn:aws:sts::<account-id>:assumed-role/solar-system-eks-node-group-role/...
+```
+
+Expected role:
+
+```text
+arn:aws:iam::<account-id>:role/solar-system-eks-ebs-csi-driver-role
+```
+
+Terraform creates the proper EBS CSI IRSA setup:
+
+- IAM OIDC provider for the EKS cluster
+- IAM role for `kube-system/ebs-csi-controller-sa`
+- `AmazonEBSCSIDriverPolicy` attached to that role
+- EBS CSI add-on configured with `service_account_role_arn`
+
+Verify the service account annotation:
+
+```bash
+kubectl get sa ebs-csi-controller-sa -n kube-system -o yaml
+```
+
+Expected annotation:
+
+```yaml
+eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/solar-system-eks-ebs-csi-driver-role
+```
+
+Verify the EKS add-on role:
+
+```bash
+aws eks describe-addon \
+  --cluster-name solar-system-eks \
+  --addon-name aws-ebs-csi-driver \
+  --region ap-southeast-1 \
+  --profile master-programmatic-admin \
+  --query 'addon.serviceAccountRoleArn'
+```
+
+If the role is correct but the PVC is still pending, restart the EBS CSI controller and recreate the stuck MongoDB pod:
+
+```bash
+kubectl rollout restart deployment ebs-csi-controller -n kube-system
+kubectl rollout status deployment ebs-csi-controller -n kube-system
+kubectl delete pod -n solar-system -l app.kubernetes.io/name=mongo
+```
+
+Then check the volume:
+
+```bash
+kubectl get pvc -n solar-system
+kubectl get pv
+```
+
+Expected result:
+
+```text
+mongo-data PVC Bound
+PV Bound to solar-system/mongo-data
+```
+
+Why this happened:
+
+The EBS CSI add-on had the correct IRSA configuration after Terraform, but the existing controller pods needed to restart before volume provisioning retried with the service account IAM role.
+
+## Cleanup
+
+Delete the app resources but keep the EKS cluster:
+
+```bash
+kubectl delete -f kubernetes/eks/
+```
+
+Destroy all AWS infrastructure created by Terraform:
+
+```bash
+cd terraform
+terraform destroy
+```
+
+Use `terraform destroy` when you are finished testing to avoid ongoing EKS, NAT Gateway, EC2, EBS, and LoadBalancer costs.
+
 ## Current Project Phase
 
 Completed:
@@ -299,11 +455,13 @@ Completed:
 - MongoDB seed data and seed script
 - Production-style Dockerfile
 - Docker Hub image push
-- Terraform EKS infrastructure scaffold
+- GitHub Actions CI for test, coverage, Docker build, and Docker Hub push
+- Terraform EKS infrastructure
+- EBS CSI driver with IRSA
+- Kubernetes manifests for EKS
 
 Next:
 
-- Run Terraform plan
-- Create EKS cluster
-- Add Kubernetes manifests for the Solar System app
-- Add GitHub Actions CI/CD
+- Verify app through the AWS LoadBalancer
+- Commit Kubernetes manifests
+- Add GitHub Actions deployment to EKS

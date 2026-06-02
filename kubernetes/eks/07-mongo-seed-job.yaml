@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongo-seed
+  namespace: solar-system
+  labels:
+    app.kubernetes.io/name: mongo-seed
+    app.kubernetes.io/part-of: solar-system
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mongo-seed
+        app.kubernetes.io/part-of: solar-system
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mongo-seed
+          image: mongo:7
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              until mongosh "mongodb://mongo:27017/solar-system" --quiet --eval "db.adminCommand('ping').ok"; do
+                echo "Waiting for MongoDB..."
+                sleep 5
+              done
+
+              mongosh "mongodb://mongo:27017/solar-system" --quiet --eval '
+                const fs = require("fs");
+                const planets = JSON.parse(fs.readFileSync("/seed/planets.json", "utf8"));
+                db.planets.deleteMany({});
+                db.planets.insertMany(planets);
+                print(`Seeded ${planets.length} planets`);
+              '
+          volumeMounts:
+            - name: mongo-seed-data
+              mountPath: /seed
+              readOnly: true
+      volumes:
+        - name: mongo-seed-data
+          configMap:
+            name: mongo-seed-data
