@@ -117,21 +117,52 @@ kubectl get svc solar-system-app -n solar-system
 
 Open the LoadBalancer hostname shown under `EXTERNAL-IP`.
 
-## CI
+## CI/CD
 
-GitHub Actions currently:
+GitHub Actions:
 
-1. Installs dependencies with `npm ci`
-2. Runs tests and coverage
-3. Builds and smoke-tests the Docker image
-4. Pushes the commit SHA and `latest` tags to Docker Hub
+1. Runs tests and coverage
+2. Builds and smoke-tests the Docker image
+3. Pushes commit SHA and `latest` tags to Docker Hub
+4. Authenticates to AWS through GitHub OIDC
+5. Applies the manifests and updates the EKS Deployment to the commit SHA image
+6. Waits for the rolling update and calls `/live`
 
-Required GitHub secrets:
+Required GitHub configuration:
 
-```text
-DOCKERHUB_USERNAME
-DOCKERHUB_TOKEN
+- Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
+- Variables: `AWS_ROLE_ARN`, `ENABLE_EKS_DEPLOY=true`
+
+See [docs/CI.md](docs/CI.md) for a short workflow reference.
+
+## Verify EKS
+
+```bash
+kubectl get pods -n solar-system
+kubectl get svc -n solar-system
+kubectl get pvc -n solar-system
+kubectl get pv
+kubectl get storageclass
 ```
+
+The expected result is one running MongoDB pod, one completed seed Job, two
+running application pods, and a bound `mongo-data` PVC/PV. The seed Job exits
+after inserting the initial planet data, so `Completed` is normal.
+
+## Test CD
+
+Make a small application change, commit it, and push it to `main`. Then run:
+
+```bash
+kubectl get pods -n solar-system -w
+kubectl rollout status deployment/solar-system-app -n solar-system
+kubectl get deployment solar-system-app -n solar-system \
+  -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+```
+
+No manual rollout restart is needed. The workflow changes the Deployment image
+to the new Git commit SHA, and Kubernetes automatically performs a rolling
+update.
 
 ## Troubleshooting
 
@@ -190,6 +221,8 @@ Destroy unused resources to avoid EKS, EC2, NAT Gateway, EBS, and LoadBalancer c
 
 ## Next Phase
 
-- Add GitHub Actions AWS OIDC role using Terraform
-- Deploy to EKS automatically from GitHub Actions
-- Replace the LoadBalancer Service with AWS Load Balancer Controller and Ingress
+1. Verify CD with a small visible application change.
+2. Install Metrics Server and add a CPU-based Horizontal Pod Autoscaler.
+3. Generate traffic with `hey` and watch scaling with `kubectl get hpa -w`.
+4. Install AWS Load Balancer Controller and replace the LoadBalancer Service
+   with an Ingress.
