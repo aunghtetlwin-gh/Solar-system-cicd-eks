@@ -38,6 +38,11 @@ output "ebs_csi_driver_role_arn" {
   value       = aws_iam_role.ebs_csi_driver.arn
 }
 
+output "github_actions_deploy_role_arn" {
+  description = "IAM role ARN that GitHub Actions assumes through OIDC to deploy to EKS."
+  value       = aws_iam_role.github_actions_eks_deploy.arn
+}
+
 output "public_subnet_ids" {
   description = "Public subnet IDs."
   value       = aws_subnet.public[*].id

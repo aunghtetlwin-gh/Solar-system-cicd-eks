@@ -105,3 +105,15 @@ variable "cluster_endpoint_public_access_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "github_repository" {
+  description = "GitHub repository allowed to assume the deployment role, in owner/repository format."
+  type        = string
+  default     = "aunghtetlwin-gh/Solar-system-cicd-eks"
+}
+
+variable "github_deploy_branch" {
+  description = "GitHub branch allowed to assume the deployment role."
+  type        = string
+  default     = "main"
+}

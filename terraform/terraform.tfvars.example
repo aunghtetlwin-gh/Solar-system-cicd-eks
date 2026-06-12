@@ -6,6 +6,9 @@ environment  = "dev"
 cluster_name    = "solar-system-eks"
 cluster_version = "1.33"
 
+github_repository    = "aunghtetlwin-gh/Solar-system-cicd-eks"
+github_deploy_branch = "main"
+
 node_group_instance_types = ["t3.medium"]
 node_group_min_size       = 1
 node_group_desired_size   = 2
