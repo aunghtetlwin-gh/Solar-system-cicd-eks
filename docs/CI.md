@@ -1,5 +1,20 @@
 # CI Workflow Reference
 
+  Use uses when calling an existing reusable GitHub Action:
+
+  uses: actions/checkout@v6
+  uses: docker/setup-buildx-action@v4
+  uses: aws-actions/configure-aws-credentials@v6
+
+  Use run when executing commands:
+
+  run: npm test
+  run: docker run ...
+  run: kubectl apply ...
+  run: curl ...
+
+  A single step cannot normally use both uses and run. Each step chooses either a reusable action or shell commands.
+
 Workflow file:
 
 ```text

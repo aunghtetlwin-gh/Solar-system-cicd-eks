@@ -1,44 +1,44 @@
-  # 1. Requests a GitHub OIDC token.
-  # 2. Sends it to AWS STS.
-  # 3. AWS validates the audience.
-  # 4. AWS validates repository and branch.
-  # 5. AWS allows the deployment role to be assumed.
-  # 6. AWS returns temporary credentials.
-  # 7. Later AWS CLI and kubectl commands use those credentials.
+# 1. Requests a GitHub OIDC token.
+# 2. Sends it to AWS STS.
+# 3. AWS validates the audience.
+# 4. AWS validates repository and branch.
+# 5. AWS allows the deployment role to be assumed.
+# 6. AWS returns temporary credentials.
+# 7. Later AWS CLI and kubectl commands use those credentials.
 
-  # ## Resources Created
+# ## Resources Created
 
-  # The file creates five AWS resources:
+# The file creates five AWS resources:
 
-  # aws_iam_openid_connect_provider.github_actions
-  # aws_iam_role.github_actions_eks_deploy
-  # aws_iam_role_policy.github_actions_eks_describe
-  # aws_eks_access_entry.github_actions
-  # aws_eks_access_policy_association.github_actions_cluster_admin
+# aws_iam_openid_connect_provider.github_actions
+# aws_iam_role.github_actions_eks_deploy
+# aws_iam_role_policy.github_actions_eks_describe
+# aws_eks_access_entry.github_actions
+# aws_eks_access_policy_association.github_actions_cluster_admin
 
-  # It also reads one data source:
+# It also reads one data source:
 
-  # data.tls_certificate.github_actions
+# data.tls_certificate.github_actions
 
-  # ## Why OIDC Is Better Than AWS Keys
+# ## Why OIDC Is Better Than AWS Keys
 
-  # Without OIDC, you might store these in GitHub:
+# Without OIDC, you might store these in GitHub:
 
-  # AWS_ACCESS_KEY_ID
-  # AWS_SECRET_ACCESS_KEY
+# AWS_ACCESS_KEY_ID
+# AWS_SECRET_ACCESS_KEY
 
-  # Those credentials are long-lived and must be rotated manually.
+# Those credentials are long-lived and must be rotated manually.
 
-  # With OIDC:
+# With OIDC:
 
-  # - no permanent AWS keys in GitHub
-  # - temporary credentials per workflow run
-  # - credentials expire automatically
-  # - trust is restricted to your repository
-  # - trust is restricted to main
-  # - the role can be revoked centrally in AWS
+# - no permanent AWS keys in GitHub
+# - temporary credentials per workflow run
+# - credentials expire automatically
+# - trust is restricted to your repository
+# - trust is restricted to main
+# - the role can be revoked centrally in AWS
 
-  # That is why OIDC is the preferred CI/CD authentication method.
+# That is why OIDC is the preferred CI/CD authentication method.
 
 data "tls_certificate" "github_actions" {
   url = "https://token.actions.githubusercontent.com" #GitHub’s OIDC endpoint and reads its TLS certificate information.
@@ -61,15 +61,15 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
   }
 }
 
-  # This prevents:
+# This prevents:
 
-  # - another GitHub repository from assuming the role
-  # - another GitHub user from using the role
-  # - a feature branch from deploying
-  # - a pull request workflow from deploying
-  # - a fork from deploying
+# - another GitHub repository from assuming the role
+# - another GitHub user from using the role
+# - a feature branch from deploying
+# - a pull request workflow from deploying
+# - a fork from deploying
 
-  # This is one of the most important security restrictions.
+# This is one of the most important security restrictions.
 
 resource "aws_iam_role" "github_actions_eks_deploy" {
   name = "${var.cluster_name}-github-deploy-role"
