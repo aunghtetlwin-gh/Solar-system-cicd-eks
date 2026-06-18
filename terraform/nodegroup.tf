@@ -59,7 +59,7 @@ resource "aws_eks_node_group" "main" {
 
   launch_template {
     id      = aws_launch_template.node_group.id
-    version = "$Latest"
+    version = aws_launch_template.node_group.latest_version
   }
 
   labels = {

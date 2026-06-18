@@ -149,6 +149,47 @@ The expected result is one running MongoDB pod, one completed seed Job, two
 running application pods, and a bound `mongo-data` PVC/PV. The seed Job exits
 after inserting the initial planet data, so `Completed` is normal.
 
+## Autoscaling
+
+Terraform installs the EKS Metrics Server add-on. It supplies current pod CPU
+and memory usage to Kubernetes. The HPA scales the app between 2 and 6 replicas
+using these targets:
+
+- CPU: 60% of the `100m` request
+- Memory: 75% of the `128Mi` request, approximately `96Mi`
+
+Kubernetes calculates a replica recommendation for each metric and uses the
+larger value. Node.js may retain allocated memory after traffic falls, so
+memory-based scale-down can be slower than CPU-based scale-down.
+
+After applying Terraform and the Kubernetes manifests, verify:
+
+```bash
+kubectl get deployment metrics-server -n kube-system
+kubectl top nodes
+kubectl top pods -n solar-system
+kubectl get hpa -n solar-system
+```
+
+Load test the external application:
+
+```bash
+ADDRESS=$(kubectl get svc solar-system-app -n solar-system \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+hey -z 5m -c 100 "http://$ADDRESS/os"
+```
+
+Watch scaling in another terminal:
+
+```bash
+kubectl get hpa -n solar-system -w
+kubectl get pods -n solar-system -w
+```
+
+The HPA may take a few minutes to scale down after traffic stops because it has
+a five-minute scale-down stabilization window.
+
 ## Test CD
 
 Make a small application change, commit it, and push it to `main`. Then run:
@@ -221,8 +262,7 @@ Destroy unused resources to avoid EKS, EC2, NAT Gateway, EBS, and LoadBalancer c
 
 ## Next Phase
 
-1. Verify CD with a small visible application change.
-2. Install Metrics Server and add a CPU-based Horizontal Pod Autoscaler.
-3. Generate traffic with `hey` and watch scaling with `kubectl get hpa -w`.
-4. Install AWS Load Balancer Controller and replace the LoadBalancer Service
+1. Apply and verify Metrics Server and HPA.
+2. Generate traffic with `hey` and watch pod scaling.
+3. Install AWS Load Balancer Controller and replace the LoadBalancer Service
    with an Ingress.

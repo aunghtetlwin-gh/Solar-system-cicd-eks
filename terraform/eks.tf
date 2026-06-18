@@ -72,3 +72,12 @@ resource "aws_eks_addon" "aws_ebs_csi_driver" {
     aws_iam_role_policy_attachment.ebs_csi_driver_AmazonEBSCSIDriverPolicy
   ]
 }
+
+resource "aws_eks_addon" "metrics_server" {
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "metrics-server"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [aws_eks_node_group.main]
+}
