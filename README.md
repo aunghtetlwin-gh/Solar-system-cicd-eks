@@ -104,18 +104,36 @@ The manifests in `kubernetes/eks/` create:
 - `gp3` StorageClass and MongoDB PVC
 - MongoDB Deployment, Service, and seed Job
 - Two app replicas
-- AWS LoadBalancer Service
+- ClusterIP app Service
+- ALB Ingress
 
-Deploy:
+Install AWS Load Balancer Controller after Terraform completes:
+
+```bash
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update eks
+
+helm upgrade --install aws-load-balancer-controller \
+  eks/aws-load-balancer-controller \
+  --namespace kube-system \
+  --set clusterName=solar-system-eks \
+  --set region=ap-southeast-1 \
+  --set vpcId=$(cd terraform && terraform output -raw vpc_id) \
+  --set serviceAccount.create=true \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(cd terraform && terraform output -raw aws_load_balancer_controller_role_arn)
+```
+
+Deploy the application:
 
 ```bash
 kubectl apply -f kubernetes/eks/
 kubectl get all -n solar-system
 kubectl get pvc,pv -A
-kubectl get svc solar-system-app -n solar-system
+kubectl get ingress -n solar-system
 ```
 
-Open the LoadBalancer hostname shown under `EXTERNAL-IP`.
+Open the Ingress hostname shown under `ADDRESS`.
 
 ## CI/CD
 
@@ -174,7 +192,7 @@ kubectl get hpa -n solar-system
 Load test the external application:
 
 ```bash
-ADDRESS=$(kubectl get svc solar-system-app -n solar-system \
+ADDRESS=$(kubectl get ingress solar-system-app -n solar-system \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
 hey -z 5m -c 100 "http://$ADDRESS/os"
@@ -243,6 +261,22 @@ kubectl get pvc -n solar-system
 kubectl get pv
 ```
 
+### Ingress does not get an ADDRESS
+
+Check the controller:
+
+```bash
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+kubectl logs -n kube-system deployment/aws-load-balancer-controller
+kubectl describe ingress solar-system-app -n solar-system
+```
+
+Confirm the controller service account has the Terraform-created IAM role:
+
+```bash
+kubectl get sa aws-load-balancer-controller -n kube-system -o yaml
+```
+
 ## Cleanup
 
 Delete only the Kubernetes application:
@@ -262,7 +296,6 @@ Destroy unused resources to avoid EKS, EC2, NAT Gateway, EBS, and LoadBalancer c
 
 ## Next Phase
 
-1. Apply and verify Metrics Server and HPA.
-2. Generate traffic with `hey` and watch pod scaling.
-3. Install AWS Load Balancer Controller and replace the LoadBalancer Service
-   with an Ingress.
+1. Verify ALB Ingress routing.
+2. Re-test HPA through the Ingress address.
+3. Add Route 53 and ACM TLS for HTTPS.

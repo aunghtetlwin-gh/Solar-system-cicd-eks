@@ -38,9 +38,19 @@ output "ebs_csi_driver_role_arn" {
   value       = aws_iam_role.ebs_csi_driver.arn
 }
 
+output "aws_load_balancer_controller_role_arn" {
+  description = "IAM role ARN used by AWS Load Balancer Controller."
+  value       = aws_iam_role.aws_load_balancer_controller.arn
+}
+
 output "github_actions_deploy_role_arn" {
   description = "IAM role ARN that GitHub Actions assumes through OIDC to deploy to EKS."
   value       = aws_iam_role.github_actions_eks_deploy.arn
+}
+
+output "vpc_id" {
+  description = "VPC ID used by the EKS cluster."
+  value       = aws_vpc.main.id
 }
 
 output "public_subnet_ids" {

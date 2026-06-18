@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: solar-system-app
     app.kubernetes.io/part-of: solar-system
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app.kubernetes.io/name: solar-system-app
   ports:
