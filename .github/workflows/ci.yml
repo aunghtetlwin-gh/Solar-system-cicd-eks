@@ -172,7 +172,7 @@ jobs:
       - name: Smoke test deployed app
         run: |
           for i in {1..60}; do
-            ADDRESS=$(kubectl get service solar-system-app \
+            ADDRESS=$(kubectl get ingress solar-system-app \
               --namespace solar-system \
               --output jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
