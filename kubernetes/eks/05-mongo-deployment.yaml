@@ -26,10 +26,27 @@ spec:
           ports:
             - name: mongo
               containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: MONGO_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: MONGO_PASSWORD
           readinessProbe:
             exec:
               command:
                 - mongosh
+                - -u
+                - $(MONGO_INITDB_ROOT_USERNAME)
+                - -p
+                - $(MONGO_INITDB_ROOT_PASSWORD)
+                - --authenticationDatabase
+                - admin
                 - --quiet
                 - --eval
                 - db.adminCommand('ping').ok
@@ -40,6 +57,12 @@ spec:
             exec:
               command:
                 - mongosh
+                - -u
+                - $(MONGO_INITDB_ROOT_USERNAME)
+                - -p
+                - $(MONGO_INITDB_ROOT_PASSWORD)
+                - --authenticationDatabase
+                - admin
                 - --quiet
                 - --eval
                 - db.adminCommand('ping').ok

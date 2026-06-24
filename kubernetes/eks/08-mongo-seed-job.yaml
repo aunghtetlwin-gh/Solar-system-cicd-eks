@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: mongo-seed
+  name: mongo-seed-auth
   namespace: solar-system
   labels:
     app.kubernetes.io/name: mongo-seed
@@ -19,16 +19,27 @@ spec:
         - name: mongo-seed
           image: mongo:7
           imagePullPolicy: IfNotPresent
+          env:
+            - name: MONGO_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: MONGO_USERNAME
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: MONGO_PASSWORD
           command:
             - sh
             - -c
             - |
-              until mongosh "mongodb://mongo:27017/solar-system" --quiet --eval "db.adminCommand('ping').ok"; do
+              until mongosh "mongodb://mongo:27017/solar-system?authSource=admin" -u "$MONGO_USERNAME" -p "$MONGO_PASSWORD" --quiet --eval "db.adminCommand('ping').ok"; do
                 echo "Waiting for MongoDB..."
                 sleep 5
               done
 
-              mongosh "mongodb://mongo:27017/solar-system" --quiet --eval '
+              mongosh "mongodb://mongo:27017/solar-system?authSource=admin" -u "$MONGO_USERNAME" -p "$MONGO_PASSWORD" --quiet --eval '
                 const fs = require("fs");
                 const planets = JSON.parse(fs.readFileSync("/seed/planets.json", "utf8"));
                 db.planets.deleteMany({});

@@ -102,6 +102,7 @@ The manifests in `kubernetes/eks/` create:
 
 - `solar-system` namespace
 - `gp3` StorageClass and MongoDB PVC
+- MongoDB credentials Secret
 - MongoDB Deployment, Service, and seed Job
 - Two app replicas
 - ClusterIP app Service
@@ -166,6 +167,18 @@ kubectl get storageclass
 The expected result is one running MongoDB pod, one completed seed Job, two
 running application pods, and a bound `mongo-data` PVC/PV. The seed Job exits
 after inserting the initial planet data, so `Completed` is normal.
+
+MongoDB authentication is enabled through the `mongo-credentials` Secret. The
+example password is for learning only; change it before using this outside a
+temporary lab cluster.
+
+If you enable MongoDB auth on an existing unauthenticated MongoDB volume,
+recreate the lab PVC so MongoDB initializes with credentials:
+
+```bash
+kubectl delete pvc mongo-data -n solar-system
+kubectl apply -f kubernetes/eks/
+```
 
 ## Autoscaling
 

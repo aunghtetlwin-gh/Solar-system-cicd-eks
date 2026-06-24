@@ -27,6 +27,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: solar-system-config
+            - secretRef:
+                name: mongo-credentials
           readinessProbe:
             httpGet:
               path: /ready

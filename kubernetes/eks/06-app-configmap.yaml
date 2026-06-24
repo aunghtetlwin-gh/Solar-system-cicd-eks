@@ -8,6 +8,4 @@ metadata:
     app.kubernetes.io/part-of: solar-system
 data:
   PORT: "3000"
-  MONGO_URI: mongodb://mongo:27017/solar-system
-  MONGO_USERNAME: ""
-  MONGO_PASSWORD: ""
+  MONGO_URI: mongodb://mongo:27017/solar-system?authSource=admin
