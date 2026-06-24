@@ -7,16 +7,19 @@ metadata:
     app.kubernetes.io/name: solar-system-app
     app.kubernetes.io/part-of: solar-system
   annotations:
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-southeast-1:968712105096:certificate/59486891-791b-40b5-a5dd-0da9192dea14
     alb.ingress.kubernetes.io/healthcheck-path: /live
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/load-balancer-name: solar-system-dev-alb
     alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/tags: Project=solar-system,Environment=dev,ManagedBy=kubernetes
     alb.ingress.kubernetes.io/target-type: ip
 spec:
   ingressClassName: alb
   rules:
-    - http:
+    - host: solar-system.aunghtetlwin.com
+      http:
         paths:
           - path: /
             pathType: Prefix

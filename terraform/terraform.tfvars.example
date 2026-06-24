@@ -17,3 +17,8 @@ node_group_max_size       = 3
 # For better security, replace this with your public IP CIDR, for example:
 # cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
 cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"]
+
+root_domain_name = "aunghtetlwin.com"
+app_subdomain    = "solar-system"
+app_alb_dns_name = "solar-system-dev-alb-example.ap-southeast-1.elb.amazonaws.com"
+app_alb_zone_id  = "Z1LMS91P8CMLE5"

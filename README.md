@@ -154,6 +154,56 @@ Required GitHub configuration:
 
 See [docs/CI.md](docs/CI.md) for a short workflow reference.
 
+## Domain And HTTPS
+
+The root domain `aunghtetlwin.com` is registered in Cloudflare. Terraform
+creates a delegated Route 53 hosted zone for:
+
+```text
+solar-system.aunghtetlwin.com
+```
+
+After `terraform apply`, copy the Route 53 nameservers into Cloudflare DNS as
+`NS` records:
+
+```bash
+cd terraform
+terraform output app_route53_name_servers
+```
+
+In Cloudflare, add one record for each output value:
+
+```text
+Type: NS
+Name: solar-system
+Content: <Route 53 nameserver>
+Proxy: DNS only
+```
+
+Then verify delegation:
+
+```bash
+dig NS solar-system.aunghtetlwin.com
+```
+
+Terraform also creates the ACM certificate and DNS validation records in the
+delegated Route 53 zone. ACM becomes `Issued` after Cloudflare delegation
+propagates.
+
+After the ALB Ingress exists, set the ALB DNS name and hosted zone ID in
+Terraform variables so Route 53 can create the app alias record:
+
+```hcl
+app_alb_dns_name = "solar-system-dev-alb-..."
+app_alb_zone_id  = "Z1LMS91P8CMLE5"
+```
+
+Then apply Terraform again and use:
+
+```text
+https://solar-system.aunghtetlwin.com
+```
+
 ## Verify EKS
 
 ```bash

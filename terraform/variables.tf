@@ -117,3 +117,27 @@ variable "github_deploy_branch" {
   type        = string
   default     = "main"
 }
+
+variable "root_domain_name" {
+  description = "Root domain registered in Cloudflare."
+  type        = string
+  default     = "aunghtetlwin.com"
+}
+
+variable "app_subdomain" {
+  description = "Subdomain delegated to Route 53 for the Solar System app."
+  type        = string
+  default     = "solar-system"
+}
+
+variable "app_alb_dns_name" {
+  description = "DNS name of the ALB created by AWS Load Balancer Controller. Leave empty until the Ingress ALB exists."
+  type        = string
+  default     = ""
+}
+
+variable "app_alb_zone_id" {
+  description = "Canonical hosted zone ID of the ALB created by AWS Load Balancer Controller. Leave empty until the Ingress ALB exists."
+  type        = string
+  default     = ""
+}
