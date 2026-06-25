@@ -11,8 +11,6 @@ on:
 env:
   NODE_VERSION: "22"
   IMAGE_NAME: aunghtetlwin/solar-system-app
-  AWS_REGION: ap-southeast-1
-  EKS_CLUSTER_NAME: solar-system-eks
 
 jobs:
   unit-testing:
@@ -122,66 +120,33 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.IMAGE_NAME }}:latest
 
-  deploy-eks:
-    if: github.event_name == 'push' && vars.ENABLE_EKS_DEPLOY == 'true'
+  update-gitops-dev:
+    if: github.event_name == 'push' && vars.ENABLE_GITOPS_UPDATE == 'true' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     needs:
       - docker
-    timeout-minutes: 15
 
     permissions:
-      contents: read
-      id-token: write
+      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: v1.33.0
-
-      - name: Configure EKS kubeconfig
+      - name: Update dev overlay image tag
         run: |
-          aws eks update-kubeconfig \
-            --region "$AWS_REGION" \
-            --name "$EKS_CLUSTER_NAME"
+          sed -i -E "s|newTag: .*|newTag: ${GITHUB_SHA}|" \
+            kubernetes/overlays/dev/kustomization.yaml
 
-      - name: Apply Kubernetes manifests
-        run: kubectl apply -f kubernetes/eks/
-
-      - name: Deploy commit image
+      - name: Commit dev overlay update
         run: |
-          kubectl set image deployment/solar-system-app \
-            solar-system-app="$IMAGE_NAME:$GITHUB_SHA" \
-            --namespace solar-system
+          if git diff --quiet kubernetes/overlays/dev/kustomization.yaml; then
+            echo "Dev overlay already uses this image tag."
+            exit 0
+          fi
 
-      - name: Wait for app rollout
-        run: |
-          kubectl rollout status deployment/solar-system-app \
-            --namespace solar-system \
-            --timeout=5m
-
-      - name: Smoke test deployed app
-        run: |
-          for i in {1..60}; do
-            ADDRESS=$(kubectl get ingress solar-system-app \
-              --namespace solar-system \
-              --output jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-
-            if [ -n "$ADDRESS" ] && curl -fsS "http://$ADDRESS/live"; then
-              exit 0
-            fi
-
-            sleep 10
-          done
-
-          kubectl get all --namespace solar-system
-          exit 1
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add kubernetes/overlays/dev/kustomization.yaml
+          git commit -m "Update dev image to ${GITHUB_SHA} [skip ci]"
+          git push

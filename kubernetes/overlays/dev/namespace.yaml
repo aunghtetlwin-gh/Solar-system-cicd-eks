@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: solar-system-dev
+  labels:
+    app.kubernetes.io/name: solar-system
+    app.kubernetes.io/part-of: solar-system
+    environment: dev

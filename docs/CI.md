@@ -4,14 +4,13 @@
 
   uses: actions/checkout@v6
   uses: docker/setup-buildx-action@v4
-  uses: aws-actions/configure-aws-credentials@v6
 
   Use run when executing commands:
 
   run: npm test
   run: docker run ...
-  run: kubectl apply ...
-  run: curl ...
+  run: sed -i ...
+  run: git commit ...
 
   A single step cannot normally use both uses and run. Each step chooses either a reusable action or shell commands.
 
@@ -34,12 +33,12 @@ unit-testing ──┐
 code-coverage ─┘
                                              |
                                              v
-                                   optional EKS deployment
+                                   optional dev GitOps tag update
 ```
 
 The Docker job runs only when tests and coverage pass.
 
-The EKS deployment job runs only when `ENABLE_EKS_DEPLOY` is set to `true`.
+The dev GitOps update job runs only when `ENABLE_GITOPS_UPDATE` is set to `true`.
 
 ## Jobs
 
@@ -109,58 +108,66 @@ Pull requests run tests, coverage, build, and smoke testing.
 
 They do not log in or push images to Docker Hub.
 
-## EKS Deployment
+## GitOps Deployment
 
-The `deploy-eks` job:
+The `update-gitops-dev` job:
 
 ```text
-Gets temporary AWS credentials through GitHub OIDC
-Configures kubectl for solar-system-eks
-Applies kubernetes/eks manifests
-Deploys the commit SHA image
-Waits for the Deployment rollout
-Calls the external /live endpoint
+Updates kubernetes/overlays/dev/kustomization.yaml
+Sets the dev image tag to the Git commit SHA
+Commits the dev overlay update back to main with [skip ci]
+Argo CD detects the Git change
+Argo CD syncs the dev application to EKS
 ```
 
 Required GitHub repository variables:
 
 ```text
-ENABLE_EKS_DEPLOY
-AWS_ROLE_ARN
+ENABLE_GITOPS_UPDATE
 ```
 
-Keep this disabled while EKS is destroyed:
+Keep this disabled until Argo CD is installed and the dev Application exists:
 
 ```text
-ENABLE_EKS_DEPLOY=false
-```
-
-After Terraform creates the infrastructure and GitHub OIDC role:
-
-```bash
-terraform output -raw github_actions_deploy_role_arn
+ENABLE_GITOPS_UPDATE=false
 ```
 
 Set:
 
 ```text
-AWS_ROLE_ARN=<Terraform output>
-ENABLE_EKS_DEPLOY=true
+ENABLE_GITOPS_UPDATE=true
 ```
 
-The deploy job uses:
+The Docker image still uses:
 
 ```text
 aunghtetlwin/solar-system-app:<git-commit-sha>
 ```
 
-This deploys the exact image built by the same workflow.
+This deploys the exact image built by the same workflow after Argo CD syncs.
+
+## Dev And Prod Promotion
+
+Dev is updated automatically by CI:
+
+```text
+main push -> image build -> dev overlay image tag commit -> Argo CD dev auto-sync
+```
+
+Prod is promoted by Git:
+
+```text
+copy tested dev image tag into kubernetes/overlays/prod/kustomization.yaml
+open PR
+merge PR
+Argo CD prod syncs from Git
+```
 
 ## Current Limitation
 
-The EKS deployment requires the Terraform infrastructure and OIDC role to exist. The job is skipped when deployment is disabled.
+Argo CD must be installed in the cluster before GitOps sync can happen. The job is skipped when GitOps image updates are disabled.
 
 ```text
-ENABLE_EKS_DEPLOY=false -> CI and Docker publishing only
-ENABLE_EKS_DEPLOY=true  -> CI, Docker publishing, and EKS deployment
+ENABLE_GITOPS_UPDATE=false -> CI and Docker publishing only
+ENABLE_GITOPS_UPDATE=true  -> CI, Docker publishing, and dev overlay updates
 ```

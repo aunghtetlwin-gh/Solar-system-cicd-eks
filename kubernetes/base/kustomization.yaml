@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 02-mongo-pvc.yaml
+  - 03-mongo-secret.yaml
+  - 04-mongo-service.yaml
+  - 05-mongo-deployment.yaml
+  - 06-app-configmap.yaml
+  - 07-seed-configmap.yaml
+  - 08-mongo-seed-job.yaml
+  - 09-app-deployment.yaml
+  - 10-app-service.yaml
+  - 11-app-hpa.yaml
+  - 12-app-ingress.yaml

@@ -125,7 +125,7 @@ helm upgrade --install aws-load-balancer-controller \
   --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(cd terraform && terraform output -raw aws_load_balancer_controller_role_arn)
 ```
 
-Deploy the application:
+The legacy direct deployment path is:
 
 ```bash
 kubectl apply -f kubernetes/eks/
@@ -136,6 +136,51 @@ kubectl get ingress -n solar-system
 
 Open the Ingress hostname shown under `ADDRESS`.
 
+## Argo CD GitOps
+
+GitOps manifests are split into shared platform resources, reusable app base
+resources, and dev/prod overlays:
+
+```text
+kubernetes/platform
+kubernetes/base
+kubernetes/overlays/dev
+kubernetes/overlays/prod
+argocd/projects
+argocd/applications
+```
+
+Install Argo CD after the EKS cluster exists:
+
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl rollout status deployment/argocd-server -n argocd --timeout=5m
+```
+
+Create the Argo CD project and applications:
+
+```bash
+kubectl apply -f argocd/projects/
+kubectl apply -f argocd/applications/
+```
+
+Applications:
+
+- `solar-system-platform` syncs shared cluster resources such as `gp3`.
+- `solar-system-dev` syncs `kubernetes/overlays/dev` automatically.
+- `solar-system-prod` syncs `kubernetes/overlays/prod` after promotion.
+
+Recommended promotion flow:
+
+```text
+GitHub Actions updates dev image tag
+Argo CD auto-syncs dev
+Copy tested dev tag to prod overlay
+Merge PR
+Argo CD syncs prod
+```
+
 ## CI/CD
 
 GitHub Actions:
@@ -143,14 +188,13 @@ GitHub Actions:
 1. Runs tests and coverage
 2. Builds and smoke-tests the Docker image
 3. Pushes commit SHA and `latest` tags to Docker Hub
-4. Authenticates to AWS through GitHub OIDC
-5. Applies the manifests and updates the EKS Deployment to the commit SHA image
-6. Waits for the rolling update and calls `/live`
+4. Optionally updates the dev Kustomize overlay image tag
+5. Argo CD syncs Kubernetes from Git
 
 Required GitHub configuration:
 
 - Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
-- Variables: `AWS_ROLE_ARN`, `ENABLE_EKS_DEPLOY=true`
+- Variables: `ENABLE_GITOPS_UPDATE=true`
 
 See [docs/CI.md](docs/CI.md) for a short workflow reference.
 

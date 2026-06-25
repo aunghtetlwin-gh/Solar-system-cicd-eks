@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: solar-system
+  namespace: argocd
+spec:
+  description: Solar System GitOps project
+  sourceRepos:
+    - https://github.com/aunghtetlwin-gh/Solar-system-cicd-eks.git
+  destinations:
+    - namespace: solar-system-dev
+      server: https://kubernetes.default.svc
+    - namespace: solar-system-prod
+      server: https://kubernetes.default.svc
+    - namespace: '*'
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

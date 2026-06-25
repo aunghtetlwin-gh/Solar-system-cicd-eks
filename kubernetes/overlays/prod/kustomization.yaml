@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: solar-system-prod
+resources:
+  - namespace.yaml
+  - ../../base
+images:
+  - name: aunghtetlwin/solar-system-app
+    newName: aunghtetlwin/solar-system-app
+    newTag: latest
+patches:
+  - target:
+      kind: Ingress
+      name: solar-system-app
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1load-balancer-name
+        value: solar-system-prod-alb
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1tags
+        value: Project=solar-system,Environment=prod,ManagedBy=argocd
+      - op: replace
+        path: /spec/rules/0/host
+        value: solar-system.aunghtetlwin.com

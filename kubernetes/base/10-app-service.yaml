@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: solar-system-app
+  namespace: solar-system
+  labels:
+    app.kubernetes.io/name: solar-system-app
+    app.kubernetes.io/part-of: solar-system
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: solar-system-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
