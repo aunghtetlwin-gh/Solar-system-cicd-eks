@@ -238,14 +238,16 @@ After the ALB Ingress exists, set the ALB DNS name and hosted zone ID in
 Terraform variables so Route 53 can create the app alias record:
 
 ```hcl
-app_alb_dns_name = "solar-system-dev-alb-..."
-app_alb_zone_id  = "Z1LMS91P8CMLE5"
+prod_alb_dns_name = "solar-system-prod-alb-..."
+dev_alb_dns_name  = "solar-system-dev-alb-..."
+alb_zone_id       = "Z1LMS91P8CMLE5"
 ```
 
 Then apply Terraform again and use:
 
 ```text
 https://solar-system.aunghtetlwin.com
+http://dev.solar-system.aunghtetlwin.com
 ```
 
 ## Verify EKS

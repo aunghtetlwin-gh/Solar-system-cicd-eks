@@ -41,15 +41,29 @@ resource "aws_route53_record" "app_certificate_validation" {
 }
 
 resource "aws_route53_record" "app_alias" {
-  count = var.app_alb_dns_name == "" || var.app_alb_zone_id == "" ? 0 : 1
+  count = var.prod_alb_dns_name == "" || var.alb_zone_id == "" ? 0 : 1
 
   zone_id = aws_route53_zone.app.zone_id
   name    = local.app_domain_name
   type    = "A"
 
   alias {
-    name                   = var.app_alb_dns_name
-    zone_id                = var.app_alb_zone_id
+    name                   = var.prod_alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "aws_route53_record" "dev_app_alias" {
+  count = var.dev_alb_dns_name == "" || var.alb_zone_id == "" ? 0 : 1
+
+  zone_id = aws_route53_zone.app.zone_id
+  name    = "dev.${local.app_domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = var.dev_alb_dns_name
+    zone_id                = var.alb_zone_id
     evaluate_target_health = true
   }
 }

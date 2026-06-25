@@ -130,14 +130,20 @@ variable "app_subdomain" {
   default     = "solar-system"
 }
 
-variable "app_alb_dns_name" {
-  description = "DNS name of the ALB created by AWS Load Balancer Controller. Leave empty until the Ingress ALB exists."
+variable "prod_alb_dns_name" {
+  description = "DNS name of the prod ALB created by AWS Load Balancer Controller. Leave empty until the prod Ingress ALB exists."
   type        = string
   default     = ""
 }
 
-variable "app_alb_zone_id" {
-  description = "Canonical hosted zone ID of the ALB created by AWS Load Balancer Controller. Leave empty until the Ingress ALB exists."
+variable "dev_alb_dns_name" {
+  description = "DNS name of the dev ALB created by AWS Load Balancer Controller. Leave empty until the dev Ingress ALB exists."
+  type        = string
+  default     = ""
+}
+
+variable "alb_zone_id" {
+  description = "Canonical hosted zone ID of the ALBs created by AWS Load Balancer Controller."
   type        = string
   default     = ""
 }
