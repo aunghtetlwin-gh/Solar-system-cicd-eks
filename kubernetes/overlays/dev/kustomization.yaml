@@ -20,8 +20,6 @@ patches:
         path: /metadata/annotations/alb.ingress.kubernetes.io~1listen-ports
         value: '[{"HTTP":80}]'
       - op: remove
-        path: /metadata/annotations/alb.ingress.kubernetes.io~1certificate-arn
-      - op: remove
         path: /metadata/annotations/alb.ingress.kubernetes.io~1ssl-redirect
       - op: replace
         path: /metadata/annotations/alb.ingress.kubernetes.io~1tags

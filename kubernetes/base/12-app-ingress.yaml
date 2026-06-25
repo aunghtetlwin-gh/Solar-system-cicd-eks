@@ -7,7 +7,8 @@ metadata:
     app.kubernetes.io/name: solar-system-app
     app.kubernetes.io/part-of: solar-system
   annotations:
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-southeast-1:968712105096:certificate/59486891-791b-40b5-a5dd-0da9192dea14
+    # The controller auto-discovers the matching ACM certificate from the host name.
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-southeast-1:968712105096:certificate/example
     alb.ingress.kubernetes.io/healthcheck-path: /live
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/load-balancer-name: solar-system-dev-alb
