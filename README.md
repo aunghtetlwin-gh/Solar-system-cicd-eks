@@ -1,26 +1,24 @@
 # Solar System CI/CD on AWS EKS
 
-DevOps portfolio project for a Node.js, Express, and MongoDB Solar System application.
+DevOps portfolio project for a Node.js, Express, and MongoDB Solar System app deployed to AWS EKS with Docker, Terraform, Kubernetes, GitHub Actions, Argo CD, Route 53, ACM, and Cloudflare DNS delegation.
 
 ## Stack
 
-- Node.js 22 and Express
-- MongoDB 7
-- Docker and Docker Compose
-- Docker Hub: `aunghtetlwin/solar-system-app`
-- GitHub Actions CI
-- Terraform
-- AWS EKS and Kubernetes
+- Node.js 22, Express, MongoDB 7
+- Docker and Docker Hub: `aunghtetlwin/solar-system-app`
+- Terraform modules for VPC, EKS, IAM, and DNS
+- AWS EKS, EBS CSI, Metrics Server, AWS Load Balancer Controller
+- Kubernetes, Kustomize, Argo CD GitOps
+- GitHub Actions CI/CD
+- Route 53, ACM HTTPS, Cloudflare delegated DNS
 
-## Application
-
-Routes:
+## App Routes
 
 - `GET /` - web UI
 - `POST /planet` - planet lookup
 - `GET /live` - liveness check
 - `GET /ready` - readiness check
-- `GET /os` - pod hostname and environment
+- `GET /os` - pod hostname and runtime info
 
 ## Local Development
 
@@ -33,7 +31,11 @@ npm test
 npm start
 ```
 
-Open `http://localhost:3000`.
+Open:
+
+```text
+http://localhost:3000
+```
 
 Useful commands:
 
@@ -46,43 +48,48 @@ docker compose down
 
 ## Docker
 
-Run the published image with MongoDB:
+Run with the published Docker Hub image:
 
 ```bash
 docker compose up -d
 ```
 
-Build from local source:
+Build locally:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
-Published image:
+Image:
 
 ```text
 aunghtetlwin/solar-system-app:latest
 ```
 
-## Terraform And EKS
+## Terraform
 
-Terraform in `terraform/` creates:
+Terraform lives in:
 
-- VPC with three public and three private subnets
-- Internet Gateway, NAT Gateway, and routing
-- EKS cluster and managed worker node group
-- IAM roles and EKS add-ons
-- EBS CSI driver with OIDC/IRSA
+```text
+terraform/
+```
 
-Configure and create infrastructure:
+Current module structure:
+
+```text
+terraform/modules/vpc  - VPC, subnets, NAT, routes
+terraform/modules/eks  - EKS cluster, node group, addons, IRSA roles
+terraform/modules/iam  - GitHub Actions OIDC access to EKS
+terraform/modules/dns  - Route 53, ACM, dev/prod DNS records
+```
+
+Create infrastructure:
 
 ```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars
-terraform init
-terraform validate
-terraform plan
-terraform apply
+terraform -chdir=terraform init
+terraform -chdir=terraform validate
+terraform -chdir=terraform plan -out=tfplan
+terraform -chdir=terraform apply tfplan
 ```
 
 Configure `kubectl`:
@@ -92,23 +99,19 @@ aws eks update-kubeconfig \
   --region ap-southeast-1 \
   --name solar-system-eks \
   --profile master-programmatic-admin
+```
 
+Check:
+
+```bash
 kubectl get nodes
 ```
 
-## Deploy To EKS
+## AWS Load Balancer Controller
 
-The manifests in `kubernetes/eks/` create:
+Terraform creates the IAM role for the controller. Helm installs the controller into EKS.
 
-- `solar-system` namespace
-- `gp3` StorageClass and MongoDB PVC
-- MongoDB credentials Secret
-- MongoDB Deployment, Service, and seed Job
-- Two app replicas
-- ClusterIP app Service
-- ALB Ingress
-
-Install AWS Load Balancer Controller after Terraform completes:
+From repo root:
 
 ```bash
 helm repo add eks https://aws.github.io/eks-charts
@@ -119,38 +122,17 @@ helm upgrade --install aws-load-balancer-controller \
   --namespace kube-system \
   --set clusterName=solar-system-eks \
   --set region=ap-southeast-1 \
-  --set vpcId=$(cd terraform && terraform output -raw vpc_id) \
+  --set vpcId=$(terraform -chdir=terraform output -raw vpc_id) \
   --set serviceAccount.create=true \
   --set serviceAccount.name=aws-load-balancer-controller \
-  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(cd terraform && terraform output -raw aws_load_balancer_controller_role_arn)
+  --set-string 'serviceAccount.annotations.eks\.amazonaws\.com/role-arn'=$(terraform -chdir=terraform output -raw aws_load_balancer_controller_role_arn)
 ```
 
-The legacy direct deployment path is:
-
-```bash
-kubectl apply -f kubernetes/eks/
-kubectl get all -n solar-system
-kubectl get pvc,pv -A
-kubectl get ingress -n solar-system
-```
-
-Open the Ingress hostname shown under `ADDRESS`.
+If running from inside `terraform/`, use `terraform output -raw ...` without `-chdir`.
 
 ## Argo CD GitOps
 
-GitOps manifests are split into shared platform resources, reusable app base
-resources, and dev/prod overlays:
-
-```text
-kubernetes/platform
-kubernetes/base
-kubernetes/overlays/dev
-kubernetes/overlays/prod
-argocd/projects
-argocd/applications
-```
-
-Install Argo CD after the EKS cluster exists:
+Install Argo CD:
 
 ```bash
 kubectl create namespace argocd
@@ -158,7 +140,7 @@ kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/st
 kubectl rollout status deployment/argocd-server -n argocd --timeout=5m
 ```
 
-Create the Argo CD project and applications:
+Apply the GitOps project and apps:
 
 ```bash
 kubectl apply -f argocd/projects/
@@ -167,244 +149,206 @@ kubectl apply -f argocd/applications/
 
 Applications:
 
-- `solar-system-platform` syncs shared cluster resources such as `gp3`.
-- `solar-system-dev` syncs `kubernetes/overlays/dev` automatically.
-- `solar-system-prod` syncs `kubernetes/overlays/prod` after promotion.
+- `solar-system-platform` - shared platform resources such as `gp3` StorageClass
+- `solar-system-dev` - dev overlay with auto-sync enabled
+- `solar-system-prod` - prod overlay with manual sync/promotion
 
-Recommended promotion flow:
+Check:
 
-```text
-GitHub Actions updates dev image tag
-Argo CD auto-syncs dev
-Copy tested dev tag to prod overlay
-Merge PR
-Argo CD syncs prod
+```bash
+kubectl get applications -n argocd
+kubectl get pods -n solar-system-dev
+kubectl get pods -n solar-system-prod
+kubectl get ingress -A
 ```
 
-## CI/CD
+Manual prod sync with Argo CD CLI:
 
-GitHub Actions:
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:443
 
-1. Runs tests and coverage
-2. Builds and smoke-tests the Docker image
-3. Pushes commit SHA and `latest` tags to Docker Hub
-4. Optionally updates the dev Kustomize overlay image tag
-5. Argo CD syncs Kubernetes from Git
+argocd login localhost:8080 \
+  --username admin \
+  --password '<password>' \
+  --insecure
+
+argocd app sync solar-system-prod
+```
+
+Without Argo CD CLI:
+
+```bash
+kubectl patch application solar-system-prod \
+  -n argocd \
+  --type merge \
+  -p '{"operation":{"sync":{}}}'
+```
+
+## CI/CD Flow
+
+On push to `main`, GitHub Actions:
+
+1. Runs unit tests
+2. Runs coverage
+3. Builds and smoke-tests the Docker image
+4. Pushes Docker image tags to Docker Hub:
+   - `<git-commit-sha>`
+   - `latest`
+5. Updates `kubernetes/overlays/dev/kustomization.yaml` with the new commit SHA
+6. Commits the dev image tag update with `[skip ci]`
+7. Argo CD auto-syncs dev
 
 Required GitHub configuration:
 
 - Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
-- Variables: `ENABLE_GITOPS_UPDATE=true`
+- Variable: `ENABLE_GITOPS_UPDATE=true`
 
-See [docs/CI.md](docs/CI.md) for a short workflow reference.
+Manual prod promotion:
+
+```text
+GitHub -> Actions -> promote-prod -> Run workflow
+```
+
+The promotion workflow copies the current dev image tag into the prod overlay. Argo CD then syncs prod from Git.
+
+See [docs/CI.md](docs/CI.md).
 
 ## Domain And HTTPS
 
-The root domain `aunghtetlwin.com` is registered in Cloudflare. Terraform
-creates a delegated Route 53 hosted zone for:
+Cloudflare manages the root domain:
+
+```text
+aunghtetlwin.com
+```
+
+Terraform creates a delegated Route 53 zone for:
 
 ```text
 solar-system.aunghtetlwin.com
 ```
 
-After `terraform apply`, copy the Route 53 nameservers into Cloudflare DNS as
-`NS` records:
+After Terraform creates the zone, copy the Route 53 nameservers into Cloudflare as `NS` records:
 
 ```bash
-cd terraform
-terraform output app_route53_name_servers
+terraform -chdir=terraform output app_route53_name_servers
+dig NS solar-system.aunghtetlwin.com +short
 ```
 
-In Cloudflare, add one record for each output value:
+ACM certificate validation is handled by Terraform in Route 53. After Cloudflare delegation works, ACM becomes `ISSUED`.
+
+Important flow:
 
 ```text
-Type: NS
-Name: solar-system
-Content: <Route 53 nameserver>
-Proxy: DNS only
+Terraform creates EKS + Route 53 + ACM
+Argo CD creates Ingress
+AWS Load Balancer Controller creates ALBs
+Update terraform.tfvars with ALB DNS names
+Terraform creates Route 53 alias records
 ```
 
-Then verify delegation:
-
-```bash
-dig NS solar-system.aunghtetlwin.com
-```
-
-Terraform also creates the ACM certificate and DNS validation records in the
-delegated Route 53 zone. ACM becomes `Issued` after Cloudflare delegation
-propagates.
-
-After the ALB Ingress exists, set the ALB DNS name and hosted zone ID in
-Terraform variables so Route 53 can create the app alias record:
+Example `terraform/terraform.tfvars` ALB values:
 
 ```hcl
-prod_alb_dns_name = "solar-system-prod-alb-..."
-dev_alb_dns_name  = "solar-system-dev-alb-..."
+prod_alb_dns_name = "solar-system-prod-alb-xxxx.ap-southeast-1.elb.amazonaws.com"
+dev_alb_dns_name  = "solar-system-dev-alb-xxxx.ap-southeast-1.elb.amazonaws.com"
 alb_zone_id       = "Z1LMS91P8CMLE5"
 ```
 
-Then apply Terraform again and use:
+Apply DNS aliases:
+
+```bash
+terraform -chdir=terraform plan -out=tfplan
+terraform -chdir=terraform apply tfplan
+```
+
+URLs:
 
 ```text
 https://solar-system.aunghtetlwin.com
 http://dev.solar-system.aunghtetlwin.com
 ```
 
-## Verify EKS
-
-```bash
-kubectl get pods -n solar-system
-kubectl get svc -n solar-system
-kubectl get pvc -n solar-system
-kubectl get pv
-kubectl get storageclass
-```
-
-The expected result is one running MongoDB pod, one completed seed Job, two
-running application pods, and a bound `mongo-data` PVC/PV. The seed Job exits
-after inserting the initial planet data, so `Completed` is normal.
-
-MongoDB authentication is enabled through the `mongo-credentials` Secret. The
-example password is for learning only; change it before using this outside a
-temporary lab cluster.
-
-If you enable MongoDB auth on an existing unauthenticated MongoDB volume,
-recreate the lab PVC so MongoDB initializes with credentials:
-
-```bash
-kubectl delete pvc mongo-data -n solar-system
-kubectl apply -f kubernetes/eks/
-```
-
 ## Autoscaling
 
-Terraform installs the EKS Metrics Server add-on. It supplies current pod CPU
-and memory usage to Kubernetes. The HPA scales the app between 2 and 6 replicas
-using these targets:
+Terraform installs the EKS Metrics Server add-on. Kubernetes HPA scales the app between 2 and 6 replicas by CPU and memory.
 
-- CPU: 60% of the `100m` request
-- Memory: 75% of the `128Mi` request, approximately `96Mi`
-
-Kubernetes calculates a replica recommendation for each metric and uses the
-larger value. Node.js may retain allocated memory after traffic falls, so
-memory-based scale-down can be slower than CPU-based scale-down.
-
-After applying Terraform and the Kubernetes manifests, verify:
+Check:
 
 ```bash
-kubectl get deployment metrics-server -n kube-system
 kubectl top nodes
-kubectl top pods -n solar-system
-kubectl get hpa -n solar-system
+kubectl top pods -n solar-system-dev
+kubectl get hpa -n solar-system-dev
 ```
 
-Load test the external application:
+Load test:
 
 ```bash
-ADDRESS=$(kubectl get ingress solar-system-app -n solar-system \
+ADDRESS=$(kubectl get ingress solar-system-app -n solar-system-dev \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
 hey -z 5m -c 100 "http://$ADDRESS/os"
 ```
 
-Watch scaling in another terminal:
+Watch scaling:
 
 ```bash
-kubectl get hpa -n solar-system -w
-kubectl get pods -n solar-system -w
+kubectl get hpa -n solar-system-dev -w
+kubectl get pods -n solar-system-dev -w
 ```
 
-The HPA may take a few minutes to scale down after traffic stops because it has
-a five-minute scale-down stabilization window.
+## Test Argo CD Sync
 
-## Test CD
-
-Make a small application change, commit it, and push it to `main`. Then run:
+Watch dev pods:
 
 ```bash
-kubectl get pods -n solar-system -w
-kubectl rollout status deployment/solar-system-app -n solar-system
-kubectl get deployment solar-system-app -n solar-system \
+kubectl get pods -n solar-system-dev -w
+```
+
+Push a small app change to `main`. After GitHub Actions finishes, the workflow commits a new dev image tag. Argo CD then rolls out dev automatically.
+
+Check the running image:
+
+```bash
+kubectl get deployment solar-system-app \
+  -n solar-system-dev \
   -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 ```
 
-No manual rollout restart is needed. The workflow changes the Deployment image
-to the new Git commit SHA, and Kubernetes automatically performs a rolling
-update.
-
-## Troubleshooting
-
-### MongoDB PVC remains Pending
-
-Check the PVC:
+Pull the GitHub Actions bot commit locally:
 
 ```bash
-kubectl describe pvc mongo-data -n solar-system
+git fetch origin
+git pull --rebase origin main
+grep newTag kubernetes/overlays/dev/kustomization.yaml
 ```
 
-If EBS volume creation uses the node role instead of the EBS CSI IRSA role, verify:
+## Safe Cleanup
+
+Before `terraform destroy`, delete Argo CD-managed apps first so AWS Load Balancer Controller can remove ALBs and security groups:
 
 ```bash
-kubectl get sa ebs-csi-controller-sa -n kube-system -o yaml
+./scripts/cleanup-eks-apps.sh
+```
 
-aws eks describe-addon \
-  --cluster-name solar-system-eks \
-  --addon-name aws-ebs-csi-driver \
+Then confirm no project ALBs remain:
+
+```bash
+aws elbv2 describe-load-balancers \
   --region ap-southeast-1 \
-  --profile master-programmatic-admin \
-  --query 'addon.serviceAccountRoleArn'
+  --profile master-programmatic-admin
 ```
 
-Restart the controller and retry the Mongo pod:
+Destroy Terraform infrastructure:
 
 ```bash
-kubectl rollout restart deployment ebs-csi-controller -n kube-system
-kubectl rollout status deployment ebs-csi-controller -n kube-system
-kubectl delete pod -n solar-system -l app.kubernetes.io/name=mongo
+terraform -chdir=terraform plan -destroy -out=destroy.tfplan
+terraform -chdir=terraform apply destroy.tfplan
 ```
 
-Verify:
+Do not commit `tfplan` or `destroy.tfplan`.
 
-```bash
-kubectl get pvc -n solar-system
-kubectl get pv
-```
+## Notes
 
-### Ingress does not get an ADDRESS
-
-Check the controller:
-
-```bash
-kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
-kubectl logs -n kube-system deployment/aws-load-balancer-controller
-kubectl describe ingress solar-system-app -n solar-system
-```
-
-Confirm the controller service account has the Terraform-created IAM role:
-
-```bash
-kubectl get sa aws-load-balancer-controller -n kube-system -o yaml
-```
-
-## Cleanup
-
-Delete only the Kubernetes application:
-
-```bash
-kubectl delete -f kubernetes/eks/
-```
-
-Destroy all Terraform-managed AWS infrastructure:
-
-```bash
-cd terraform
-terraform destroy
-```
-
-Destroy unused resources to avoid EKS, EC2, NAT Gateway, EBS, and LoadBalancer charges.
-
-## Next Phase
-
-1. Verify ALB Ingress routing.
-2. Re-test HPA through the Ingress address.
-3. Add Route 53 and ACM TLS for HTTPS.
+- MongoDB runs inside Kubernetes with a PVC backed by EBS. For production, use a managed database such as MongoDB Atlas, DocumentDB, or another managed service.
+- Dev is automatic. Prod is manual promotion.
+- The legacy direct deployment manifests remain in `kubernetes/eks/`, but the main deployment path is Argo CD.
