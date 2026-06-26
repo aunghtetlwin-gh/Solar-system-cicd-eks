@@ -7,7 +7,7 @@ resources:
 images:
   - name: aunghtetlwin/solar-system-app
     newName: aunghtetlwin/solar-system-app
-    newTag: latest
+    newTag: 75caa760e5d73723198baf30afbad302a5e35e82
 patches:
   - target:
       kind: Ingress
