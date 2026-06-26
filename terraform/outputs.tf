@@ -10,101 +10,95 @@ output "aws_region" {
 
 output "cluster_name" {
   description = "EKS cluster name."
-  value       = aws_eks_cluster.main.name
+  value       = module.eks.cluster_name
 }
 
 output "cluster_endpoint" {
   description = "EKS Kubernetes API endpoint."
-  value       = aws_eks_cluster.main.endpoint
+  value       = module.eks.cluster_endpoint
 }
 
 output "cluster_oidc_issuer_url" {
   description = "EKS OIDC issuer URL."
-  value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
+  value       = module.eks.cluster_oidc_issuer_url
 }
 
 output "node_group_name" {
   description = "EKS managed node group name."
-  value       = aws_eks_node_group.main.node_group_name
+  value       = module.eks.node_group_name
 }
 
 output "node_group_role_arn" {
   description = "IAM role ARN used by EKS worker nodes."
-  value       = aws_iam_role.node_group.arn
+  value       = module.eks.node_group_role_arn
 }
 
 output "ebs_csi_driver_role_arn" {
   description = "IAM role ARN used by the EBS CSI driver service account."
-  value       = aws_iam_role.ebs_csi_driver.arn
+  value       = module.eks.ebs_csi_driver_role_arn
 }
 
 output "aws_load_balancer_controller_role_arn" {
   description = "IAM role ARN used by AWS Load Balancer Controller."
-  value       = aws_iam_role.aws_load_balancer_controller.arn
+  value       = module.eks.aws_load_balancer_controller_role_arn
 }
 
 output "github_actions_deploy_role_arn" {
   description = "IAM role ARN that GitHub Actions assumes through OIDC to deploy to EKS."
-  value       = aws_iam_role.github_actions_eks_deploy.arn
+  value       = module.iam.github_actions_deploy_role_arn
 }
 
 output "vpc_id" {
   description = "VPC ID used by the EKS cluster."
-  value       = aws_vpc.main.id
+  value       = module.vpc.vpc_id
 }
 
 output "public_subnet_ids" {
   description = "Public subnet IDs."
-  value       = aws_subnet.public[*].id
+  value       = module.vpc.public_subnet_ids
 }
 
 output "private_subnet_ids" {
   description = "Private subnet IDs."
-  value       = aws_subnet.private[*].id
+  value       = module.vpc.private_subnet_ids
 }
 
 output "update_kubeconfig_command" {
   description = "Command to configure kubectl for this EKS cluster."
-  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.main.name} --profile ${var.aws_profile}"
+  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name} --profile ${var.aws_profile}"
 }
 
 output "app_domain_name" {
   description = "Application DNS name managed by the delegated Route 53 hosted zone."
-  value       = local.app_domain_name
+  value       = module.dns.app_domain_name
 }
 
 output "app_route53_zone_id" {
   description = "Route 53 hosted zone ID for the delegated application subdomain."
-  value       = aws_route53_zone.app.zone_id
+  value       = module.dns.app_route53_zone_id
 }
 
 output "app_route53_name_servers" {
   description = "Nameservers to add as NS records in Cloudflare for the delegated subdomain."
-  value       = aws_route53_zone.app.name_servers
+  value       = module.dns.app_route53_name_servers
 }
 
 output "app_acm_certificate_arn" {
   description = "ACM certificate ARN for the application domain. Use this in the ALB Ingress after ACM is issued."
-  value       = aws_acm_certificate.app.arn
+  value       = module.dns.app_acm_certificate_arn
 }
 
 output "app_acm_validation_records" {
   description = "ACM DNS validation records created in the delegated Route 53 hosted zone."
-  value = [
-    for record in aws_route53_record.app_certificate_validation : {
-      name    = record.name
-      type    = record.type
-      records = record.records
-    }
-  ]
+  value       = module.dns.app_acm_validation_records
 }
 
 output "app_dns_alias_record" {
   description = "Route 53 alias record for the prod app domain, if ALB variables are set."
-  value       = length(aws_route53_record.app_alias) > 0 ? aws_route53_record.app_alias[0].fqdn : null
+  value       = module.dns.app_dns_alias_record
 }
 
 output "dev_app_dns_alias_record" {
   description = "Route 53 alias record for the dev app domain, if ALB variables are set."
-  value       = length(aws_route53_record.dev_app_alias) > 0 ? aws_route53_record.dev_app_alias[0].fqdn : null
+  value       = module.dns.dev_app_dns_alias_record
 }

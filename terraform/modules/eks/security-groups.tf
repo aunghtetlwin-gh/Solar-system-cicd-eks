@@ -1,13 +1,15 @@
+# Creates an additional security group for the EKS control plane.
 resource "aws_security_group" "cluster" {
   name        = "${var.cluster_name}-cluster-sg"
   description = "Additional security group for the EKS control plane"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = var.vpc_id
 
   tags = {
     Name = "${var.cluster_name}-cluster-sg"
   }
 }
 
+# Allows HTTPS access to the EKS control plane from inside the VPC.
 resource "aws_security_group_rule" "cluster_https_ingress" {
   type              = "ingress"
   security_group_id = aws_security_group.cluster.id
@@ -19,6 +21,7 @@ resource "aws_security_group_rule" "cluster_https_ingress" {
   cidr_blocks = [var.vpc_cidr]
 }
 
+# Allows all outbound traffic from the EKS control plane security group.
 resource "aws_security_group_rule" "cluster_all_egress" {
   type              = "egress"
   security_group_id = aws_security_group.cluster.id

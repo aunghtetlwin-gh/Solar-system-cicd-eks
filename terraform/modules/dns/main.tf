@@ -2,6 +2,7 @@ locals {
   app_domain_name = "${var.app_subdomain}.${var.root_domain_name}"
 }
 
+# Creates the delegated Route 53 hosted zone for the app subdomain.
 resource "aws_route53_zone" "app" {
   name    = local.app_domain_name
   comment = "Delegated hosted zone for the ${var.project_name} EKS application."
@@ -11,6 +12,7 @@ resource "aws_route53_zone" "app" {
   }
 }
 
+# Requests an ACM certificate for the production app domain.
 resource "aws_acm_certificate" "app" {
   domain_name       = local.app_domain_name
   validation_method = "DNS"
@@ -24,6 +26,7 @@ resource "aws_acm_certificate" "app" {
   }
 }
 
+# Creates the Route 53 CNAME records needed for ACM DNS validation.
 resource "aws_route53_record" "app_certificate_validation" {
   for_each = {
     for option in aws_acm_certificate.app.domain_validation_options : option.domain_name => {
@@ -40,6 +43,7 @@ resource "aws_route53_record" "app_certificate_validation" {
   records = [each.value.record]
 }
 
+# Creates the production Route 53 alias record pointing to the prod ALB.
 resource "aws_route53_record" "app_alias" {
   count = var.prod_alb_dns_name == "" || var.alb_zone_id == "" ? 0 : 1
 
@@ -54,6 +58,7 @@ resource "aws_route53_record" "app_alias" {
   }
 }
 
+# Creates the development Route 53 alias record pointing to the dev ALB.
 resource "aws_route53_record" "dev_app_alias" {
   count = var.dev_alb_dns_name == "" || var.alb_zone_id == "" ? 0 : 1
 

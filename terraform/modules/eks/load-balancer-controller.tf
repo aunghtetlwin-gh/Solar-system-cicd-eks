@@ -1,3 +1,4 @@
+# Creates the IAM permissions needed by AWS Load Balancer Controller.
 resource "aws_iam_policy" "aws_load_balancer_controller" {
   name        = "${var.cluster_name}-aws-load-balancer-controller-policy"
   description = "IAM permissions for AWS Load Balancer Controller."
@@ -112,6 +113,7 @@ resource "aws_iam_policy" "aws_load_balancer_controller" {
   })
 }
 
+# Creates the IRSA role used by the AWS Load Balancer Controller service account.
 resource "aws_iam_role" "aws_load_balancer_controller" {
   name = "${var.cluster_name}-aws-load-balancer-controller-role"
 
@@ -139,6 +141,7 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
   }
 }
 
+# Attaches the load balancer controller policy to its IRSA role.
 resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
   role       = aws_iam_role.aws_load_balancer_controller.name
   policy_arn = aws_iam_policy.aws_load_balancer_controller.arn

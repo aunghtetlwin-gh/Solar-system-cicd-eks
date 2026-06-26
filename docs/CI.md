@@ -157,10 +157,16 @@ main push -> image build -> dev overlay image tag commit -> Argo CD dev auto-syn
 Prod is promoted by Git:
 
 ```text
-copy tested dev image tag into kubernetes/overlays/prod/kustomization.yaml
-open PR
-merge PR
+Actions tab -> promote-prod -> Run workflow
+workflow copies the dev image tag into kubernetes/overlays/prod/kustomization.yaml
+workflow commits the prod overlay update back to main with [skip ci]
 Argo CD prod syncs from Git
+```
+
+Promotion workflow file:
+
+```text
+.github/workflows/promote-prod.yml
 ```
 
 ## Current Limitation
